@@ -129,22 +129,28 @@ export async function runPrompt(
     
     // If fresh context is enabled, we always clear the session before starting
     if (settings.freshContext) {
+      console.log(`[session] freshContext enabled for thread ${threadId}, clearing session`);
       sessionManager.clearSessionForThread(threadId);
     }
 
     const existingSession = sessionManager.getSessionForThread(threadId);
+    console.log(`[session] thread=${threadId} existing=${existingSession?.sessionId ?? 'none'} existingPath=${existingSession?.projectPath ?? 'none'} effectivePath=${effectivePath}`);
     if (existingSession && existingSession.projectPath === effectivePath) {
       const isValid = await sessionManager.validateSession(port, existingSession.sessionId);
+      console.log(`[session] validateSession(${existingSession.sessionId}) = ${isValid}`);
       if (isValid) {
         sessionId = existingSession.sessionId;
         sessionManager.updateSessionLastUsed(threadId);
+        console.log(`[session] REUSING session ${sessionId} for thread ${threadId}`);
       } else {
         sessionId = await sessionManager.createSession(port);
         sessionManager.setSessionForThread(threadId, sessionId, effectivePath, port);
+        console.log(`[session] CREATED new session ${sessionId} (old invalid) for thread ${threadId}`);
       }
     } else {
       sessionId = await sessionManager.createSession(port);
       sessionManager.setSessionForThread(threadId, sessionId, effectivePath, port);
+      console.log(`[session] CREATED new session ${sessionId} (no existing / path mismatch) for thread ${threadId}`);
     }
     
     const sseClient = new SSEClient();
