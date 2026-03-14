@@ -1,0 +1,162 @@
+# Global Rules
+
+## Who You Are
+You are a coding agent working on projects owned by George. You operate on a Mac Studio (Apple M2 Ultra, 64GB RAM) running macOS.
+
+## Spec-Driven Development
+
+All work follows a spec-driven workflow. Every project has a `SPEC.md` and a `TASKS.md` at its root.
+
+### SPEC.md
+The source of truth for what we are building. Contains:
+- Project overview and goals
+- Architecture decisions
+- API contracts and data models
+- Non-functional requirements (performance, security, etc.)
+
+Never make architectural changes without updating SPEC.md first. If a task reveals the spec is wrong or incomplete, update the spec before proceeding.
+
+### TASKS.md
+The living task list. Format:
+
+```markdown
+# Tasks
+
+## Current Sprint
+- [ ] TASK-001: Short description
+  - Status: in-progress | blocked | ready
+  - Assignee: opencode | tars | george | unassigned
+  - Branch: feature/task-001
+  - Notes: Any context
+- [x] TASK-002: Completed task
+  - Status: done
+  - Completed: 2026-03-14
+
+## Backlog
+- [ ] TASK-003: Future work
+  - Status: ready
+  - Priority: high | medium | low
+
+## Done
+- [x] TASK-002: What was done
+  - Completed: 2026-03-14
+  - PR: #42
+```
+
+### Workflow
+1. **Before starting work**: Read SPEC.md and TASKS.md
+2. **Pick a task**: Choose the highest-priority ready task assigned to you (or unassigned)
+3. **Update status**: Mark it `in-progress` with your name as assignee
+4. **Do the work**: Implement, test, commit
+5. **Update on completion**: Move task to Done with completion date, PR/commit ref
+6. **If blocked**: Mark `blocked` with notes explaining why
+
+### Rules
+- One task at a time
+- Commit frequently with meaningful messages
+- Run tests before marking done
+- If a task is too large, break it into subtasks
+- Keep TASKS.md as the single source of truth — any agent can read and update it
+
+## Code Standards
+- TypeScript: strict mode, no `any` unless justified
+- Rust: `clippy` clean, `cargo fmt`
+- Tests: write them. No excuses.
+- British English in comments and docs
+- Commit messages: imperative mood, concise (`Fix auth token refresh`, not `Fixed the auth token refresh issue`)
+
+## Environment
+- Mac Studio: Apple M2 Ultra, 64GB RAM, macOS
+- LM Studio on localhost:1234 (local models)
+- Git: configured, SSH keys set up
+- Rust, Node.js, Python available
+
+## Tools
+- `eza` instead of `ls` (if available)
+- `bat` instead of `cat` (if available)
+- `rg` instead of `grep` (if available)
+- `fd` instead of `find` (if available)
+
+## Git — Push Policy
+
+**Always push completed work.** After committing, push to the appropriate remote:
+
+### Remotes
+Each project has two remotes:
+- **origin** — GitHub (grvhi/repo-name)
+- **codecommit** — AWS CodeCommit (used for CI/CD pipelines)
+
+### Push to CodeCommit
+CodeCommit is the primary deployment remote. Always push here after commits:
+```bash
+git push codecommit main
+```
+
+The remote URL uses `git-remote-codecommit` and handles AWS auth automatically via the `constellation-master-readonly` profile. No manual credential setup needed.
+
+### Push to GitHub
+Push to GitHub for backup/collaboration:
+```bash
+git push origin main
+```
+
+### After making changes
+```bash
+git add -A
+git commit -m "Concise imperative message"
+git push codecommit main
+git push origin main
+```
+
+**Do not ask George to push for you. Just push.**
+
+## AWS Access
+
+### Read-Only (use freely)
+Use AWS Roles Anywhere via credential profiles. No tokens to manage — cert-based, always valid.
+
+```bash
+# Dev account (721990187164)
+AWS_PROFILE=constellation-dev-readonly aws s3 ls
+
+# Master/prod account (445849135789)
+AWS_PROFILE=constellation-master-readonly aws s3 ls
+```
+
+Profiles are in `~/.aws/config`. These are **read-only** — you cannot modify AWS resources with these profiles (except CodeCommit push, which is allowed).
+
+### Elevated Access (requires approval)
+For write/admin operations, request elevated credentials via the approval gate Lambda:
+
+1. **Request**: `curl -s "https://6iofuzbrnnqp2j4kvkbzvolzuu0ojyrm.lambda-url.ap-southeast-1.on.aws/?action=request&account=ACCOUNT_ID"`
+   - ACCOUNT_ID: `445849135789` (master) or `721990187164` (dev)
+2. **George approves**: He clicks the approval link and enters his TOTP
+3. **Claim credentials**: `curl -s "https://6iofuzbrnnqp2j4kvkbzvolzuu0ojyrm.lambda-url.ap-southeast-1.on.aws/?action=claim&request_id=REQUEST_ID"`
+4. The response contains KMS-encrypted temporary credentials — decrypt locally with the agent cert
+
+**Never try to self-approve. Never bypass the approval workflow. Always tell George what you need elevated access for and why before requesting.**
+
+### Account Reference
+| Account | ID | Profile (read-only) | Purpose |
+|---------|-----|---------------------|---------|
+| Hub | 448387745454 | george-hub | Trust anchor, approval Lambda |
+| Master | 445849135789 | constellation-master-readonly | Production, CodeCommit repos |
+| Dev | 721990187164 | constellation-dev-readonly | Development |
+
+### Common Commands
+```bash
+# List ECS services
+AWS_PROFILE=constellation-dev-readonly aws ecs list-services --cluster constellation-dev-cluster --region ap-southeast-1
+
+# Check CloudFront distributions
+AWS_PROFILE=constellation-dev-readonly aws cloudfront list-distributions --query "DistributionList.Items[].{Id:Id,Domain:DomainName}"
+
+# View CodePipeline status
+AWS_PROFILE=constellation-master-readonly aws codepipeline get-pipeline-state --name constellation-pipeline --region ap-southeast-1
+
+# Check ALB target health
+AWS_PROFILE=constellation-dev-readonly aws elbv2 describe-target-health --target-group-arn TARGET_GROUP_ARN --region ap-southeast-1
+
+# Check CodeBuild logs
+AWS_PROFILE=constellation-master-readonly aws codebuild batch-get-builds --ids BUILD_ID --region ap-southeast-1
+```
