@@ -1,10 +1,17 @@
 import type { SSEClient } from './sseClient.js';
 import * as dataStore from './dataStore.js';
+import { getServeHostname } from './configStore.js';
 
 const threadSseClients = new Map<string, SSEClient>();
 
+function getBaseUrl(port: number): string {
+  const hostname = getServeHostname();
+  const host = hostname === '0.0.0.0' ? '127.0.0.1' : hostname;
+  return `http://${host}:${port}`;
+}
+
 export async function createSession(port: number): Promise<string> {
-  const url = `http://127.0.0.1:${port}/session`;
+  const url = `${getBaseUrl(port)}/session`;
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -36,7 +43,7 @@ function parseModelString(model: string): { providerID: string; modelID: string 
 }
 
 export async function sendPrompt(port: number, sessionId: string, text: string, model?: string): Promise<void> {
-  const url = `http://127.0.0.1:${port}/session/${sessionId}/prompt_async`;
+  const url = `${getBaseUrl(port)}/session/${sessionId}/prompt_async`;
   const body: { parts: { type: string; text: string }[]; model?: { providerID: string; modelID: string } } = {
     parts: [{ type: 'text', text }],
   };
@@ -61,7 +68,7 @@ export async function sendPrompt(port: number, sessionId: string, text: string, 
 
 export async function validateSession(port: number, sessionId: string): Promise<boolean> {
   try {
-    const url = `http://127.0.0.1:${port}/session/${sessionId}`;
+    const url = `${getBaseUrl(port)}/session/${sessionId}`;
     const response = await fetch(url, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
@@ -74,7 +81,7 @@ export async function validateSession(port: number, sessionId: string): Promise<
 
 export async function listSessions(port: number): Promise<string[]> {
   try {
-    const url = `http://127.0.0.1:${port}/session`;
+    const url = `${getBaseUrl(port)}/session`;
     const response = await fetch(url, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
@@ -96,7 +103,7 @@ export async function listSessions(port: number): Promise<string[]> {
 
 export async function abortSession(port: number, sessionId: string): Promise<boolean> {
   try {
-    const url = `http://127.0.0.1:${port}/session/${sessionId}/abort`;
+    const url = `${getBaseUrl(port)}/session/${sessionId}/abort`;
     const response = await fetch(url, {
       method: 'POST',
     });

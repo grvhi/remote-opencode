@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { Server } from 'node:net';
 import type { ServeInstance } from '../types/index.js';
-import { getPortConfig } from './configStore.js';
+import { getPortConfig, getServeHostname } from './configStore.js';
 
 const DEFAULT_PORT_MIN = 14097;
 const DEFAULT_PORT_MAX = 14200;
@@ -22,14 +22,16 @@ function isPortAvailable(port: number): Promise<boolean> {
       });
     });
     
-    // Bind to 127.0.0.1 explicitly to match opencode serve's default binding
-    server.listen(port, '127.0.0.1');
+    // Bind to configured hostname to match opencode serve's binding
+    server.listen(port, getServeHostname());
   });
 }
 
 async function isOrphanedServerRunning(port: number): Promise<boolean> {
+  const hostname = getServeHostname();
+  const checkHost = hostname === '0.0.0.0' ? '127.0.0.1' : hostname;
   try {
-    const response = await fetch(`http://127.0.0.1:${port}/session`, {
+    const response = await fetch(`http://${checkHost}:${port}/session`, {
       signal: AbortSignal.timeout(1000),
     });
     // If we get any response, there's already a server running
@@ -64,8 +66,10 @@ async function findAvailablePort(): Promise<number> {
 }
 
 async function isServerResponding(port: number): Promise<boolean> {
+  const hostname = getServeHostname();
+  const checkHost = hostname === '0.0.0.0' ? '127.0.0.1' : hostname;
   try {
-    const response = await fetch(`http://127.0.0.1:${port}/session`, {
+    const response = await fetch(`http://${checkHost}:${port}/session`, {
       signal: AbortSignal.timeout(2000),
     });
     return response.ok;
@@ -94,7 +98,8 @@ export async function spawnServe(projectPath: string, model?: string): Promise<n
   
   // Note: opencode serve doesn't support --model flag
   // Model selection must happen at session/prompt level, not server startup
-  const args = ['serve', '--port', port.toString()];
+  const hostname = getServeHostname();
+  const args = ['serve', '--port', port.toString(), '--hostname', hostname];
   
   console.log(`[opencode] Spawning: opencode ${args.join(' ')}`);
   console.log(`[opencode] Working directory: ${projectPath}`);
@@ -184,7 +189,9 @@ export function stopServe(projectPath: string, model?: string): boolean {
 
 export async function waitForReady(port: number, timeout: number = 30000, projectPath?: string, model?: string): Promise<void> {
   const start = Date.now();
-  const url = `http://127.0.0.1:${port}/session`;
+  const hostname = getServeHostname();
+  const checkHost = hostname === '0.0.0.0' ? '127.0.0.1' : hostname;
+  const url = `http://${checkHost}:${port}/session`;
   const key = projectPath ? (model ? `${projectPath}:${model}` : projectPath) : null;
 
   while (Date.now() - start < timeout) {

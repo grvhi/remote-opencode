@@ -13,9 +13,14 @@ export interface PortConfig {
   max: number;
 }
 
+export interface ServeConfig {
+  hostname?: string;  // hostname for opencode serve (default: '127.0.0.1')
+}
+
 export interface AppConfig {
   bot?: BotConfig;
   ports?: PortConfig;
+  serve?: ServeConfig;
   allowedUserIds?: string[];
   openaiApiKey?: string;
 }
@@ -68,6 +73,20 @@ export function getPortConfig(): PortConfig | undefined {
 export function setPortConfig(ports: PortConfig): void {
   const config = loadConfig();
   config.ports = ports;
+  saveConfig(config);
+}
+
+export function getServeConfig(): ServeConfig | undefined {
+  return loadConfig().serve;
+}
+
+export function getServeHostname(): string {
+  return loadConfig().serve?.hostname ?? '127.0.0.1';
+}
+
+export function setServeConfig(serve: ServeConfig): void {
+  const config = loadConfig();
+  config.serve = serve;
   saveConfig(config);
 }
 

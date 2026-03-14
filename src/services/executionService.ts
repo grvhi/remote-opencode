@@ -8,6 +8,7 @@ import {
 } from 'discord.js';
 import * as dataStore from './dataStore.js';
 import * as sessionManager from './sessionManager.js';
+import { getServeHostname } from './configStore.js';
 import * as serveManager from './serveManager.js';
 import * as worktreeManager from './worktreeManager.js';
 import { SSEClient } from './sseClient.js';
@@ -147,7 +148,9 @@ export async function runPrompt(
     }
     
     const sseClient = new SSEClient();
-    sseClient.connect(`http://127.0.0.1:${port}`);
+    const sseHostname = getServeHostname();
+    const sseHost = sseHostname === '0.0.0.0' ? '127.0.0.1' : sseHostname;
+    sseClient.connect(`http://${sseHost}:${port}`);
     sessionManager.setSseClient(threadId, sseClient);
     
     sseClient.onPartUpdated((part) => {
