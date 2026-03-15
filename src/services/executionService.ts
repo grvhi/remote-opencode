@@ -110,6 +110,7 @@ export async function runPrompt(
   let lastContent = '';
   let tick = 0;
   let promptSent = false;
+  let hasSessionError = false;
   const spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
   
   const updateStreamMessage = async (content: string, components: ActionRowBuilder<ButtonBuilder>[]) => {
@@ -175,7 +176,66 @@ export async function runPrompt(
       
       (async () => {
         try {
-          const result = formatOutputForMobile(accumulatedText);
+          if (hasSessionError) {
+            sseClient.disconnect();
+            sessionManager.clearSseClient(threadId);
+            return;
+          }
+
+          const disabledButtons = new ActionRowBuilder<ButtonBuilder>()
+            .addComponents(
+              new ButtonBuilder()
+                .setCustomId(`interrupt_${threadId}`)
+                .setLabel('⏸️ Interrupt')
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(true)
+            );
+
+          if (!accumulatedText.trim()) {
+            await updateStreamMessage(
+              `${contextHeader}\n📌 **Prompt**: ${prompt}\n\n⚠️ No output received — the model may have encountered an issue.`,
+              [disabledButtons]
+            );
+            await (channel as any).send({ content: '⚠️ Done (no output received)' });
+          } else {
+            const result = formatOutputForMobile(accumulatedText);
+            
+            await updateStreamMessage(
+              `${contextHeader}\n📌 **Prompt**: ${prompt}\n\n${result.chunks[0]}`,
+              [disabledButtons]
+            );
+            
+            for (let i = 1; i < result.chunks.length; i++) {
+              await (channel as any).send({ content: result.chunks[i] });
+            }
+            
+            await (channel as any).send({ content: '✅ Done' });
+          }
+          
+          sseClient.disconnect();
+          sessionManager.clearSseClient(threadId);
+          
+          await processNextInQueue(channel, threadId, parentChannelId);
+        } catch (error) {
+          console.error('Error in onSessionIdle:', error);
+        }
+      })();
+    });
+    
+    sseClient.onSessionError((errorSessionId, errorInfo) => {
+      if (errorSessionId !== sessionId) return;
+      if (!promptSent) return;
+      
+      hasSessionError = true;
+      
+      if (updateInterval) {
+        clearInterval(updateInterval);
+        updateInterval = null;
+      }
+      
+      (async () => {
+        try {
+          const errorMsg = errorInfo.data?.message || errorInfo.name || 'Unknown error';
           const disabledButtons = new ActionRowBuilder<ButtonBuilder>()
             .addComponents(
               new ButtonBuilder()
@@ -185,26 +245,23 @@ export async function runPrompt(
                 .setDisabled(true)
             );
           
-          // First chunk goes in the main edited message
           await updateStreamMessage(
-            `${contextHeader}\n📌 **Prompt**: ${prompt}\n\n${result.chunks[0]}`,
+            `${contextHeader}\n📌 **Prompt**: ${prompt}\n\n❌ **Error**: ${errorMsg}`,
             [disabledButtons]
           );
-          
-          // Send remaining chunks as follow-up messages
-          for (let i = 1; i < result.chunks.length; i++) {
-            await (channel as any).send({ content: result.chunks[i] });
-          }
-          
-          await (channel as any).send({ content: '✅ Done' });
           
           sseClient.disconnect();
           sessionManager.clearSseClient(threadId);
           
-          // Trigger next in queue
-          await processNextInQueue(channel, threadId, parentChannelId);
+          const settings = dataStore.getQueueSettings(threadId);
+          if (settings.continueOnFailure) {
+            await processNextInQueue(channel, threadId, parentChannelId);
+          } else {
+            dataStore.clearQueue(threadId);
+            await (channel as any).send('❌ Execution failed. Queue cleared. Use `/queue settings` to change this behavior.');
+          }
         } catch (error) {
-          console.error('Error in onSessionIdle:', error);
+          console.error('Error in onSessionError:', error);
         }
       })();
     });

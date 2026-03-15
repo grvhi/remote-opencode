@@ -92,12 +92,27 @@ export const model: Command = {
         return;
       }
 
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+      try {
+        const output = execSync('opencode models', { encoding: 'utf-8', timeout: 10000 });
+        const availableModels = output.split('\n').filter(m => m.trim());
+        if (!availableModels.includes(modelName)) {
+          await interaction.editReply(
+            `❌ Model \`${modelName}\` not found.\nUse \`/model list\` to see available models.`
+          );
+          return;
+        }
+      } catch {
+        // If opencode CLI is unavailable or times out, warn but allow setting the model
+        console.warn('[model] Could not validate model name against opencode models');
+      }
+
       dataStore.setChannelModel(channelId, modelName);
       
-      await interaction.reply({
-        content: `✅ Model for this channel set to \`${modelName}\`.\nSubsequent commands will use this model.`,
-        flags: MessageFlags.Ephemeral
-      });
+      await interaction.editReply(
+        `✅ Model for this channel set to \`${modelName}\`.\nSubsequent commands will use this model.`
+      );
     }
   }
 };

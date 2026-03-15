@@ -1,14 +1,16 @@
 import { EventSource } from 'eventsource';
-import type { TextPart, SSEEvent } from '../types/index.js';
+import type { TextPart, SSEEvent, SessionErrorInfo } from '../types/index.js';
 
 type PartUpdatedCallback = (part: TextPart) => void;
 type SessionIdleCallback = (sessionId: string) => void;
+type SessionErrorCallback = (sessionId: string, error: SessionErrorInfo) => void;
 type ErrorCallback = (error: Error) => void;
 
 export class SSEClient {
   private eventSource: EventSource | null = null;
   private partUpdatedCallbacks: PartUpdatedCallback[] = [];
   private sessionIdleCallbacks: SessionIdleCallback[] = [];
+  private sessionErrorCallbacks: SessionErrorCallback[] = [];
   private errorCallbacks: ErrorCallback[] = [];
 
   connect(baseUrl: string): void {
@@ -35,6 +37,10 @@ export class SSEClient {
 
   onSessionIdle(callback: SessionIdleCallback): void {
     this.sessionIdleCallbacks.push(callback);
+  }
+
+  onSessionError(callback: SessionErrorCallback): void {
+    this.sessionErrorCallbacks.push(callback);
   }
 
   onError(callback: ErrorCallback): void {
@@ -68,6 +74,12 @@ export class SSEClient {
       const sessionID = (event.properties as any).sessionID;
       if (sessionID) {
         this.sessionIdleCallbacks.forEach((cb) => cb(sessionID));
+      }
+    } else if (event.type === 'session.error') {
+      const sessionID = (event.properties as any).sessionID;
+      const error = (event.properties as any).error as SessionErrorInfo | undefined;
+      if (sessionID && error) {
+        this.sessionErrorCallbacks.forEach((cb) => cb(sessionID, error));
       }
     }
   }

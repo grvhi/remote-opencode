@@ -190,6 +190,124 @@ describe('SSEClient', () => {
     });
   });
 
+  describe('onSessionError', () => {
+    it('should trigger callback for session.error events with ProviderAuthError', () => {
+      const callback = vi.fn();
+      client.connect('http://127.0.0.1:3000');
+      client.onSessionError(callback);
+
+      const messageHandler = mockEventSourceInstance.addEventListener.mock.calls.find(
+        (call: any) => call[0] === 'message'
+      )?.[1];
+
+      const event = {
+        data: JSON.stringify({
+          type: 'session.error',
+          properties: {
+            sessionID: 'session-1',
+            error: {
+              name: 'ProviderAuthError',
+              data: {
+                message: 'Invalid model ID',
+                providerID: 'ollama',
+              },
+            },
+          },
+        }),
+      };
+
+      messageHandler(event);
+
+      expect(callback).toHaveBeenCalledWith('session-1', {
+        name: 'ProviderAuthError',
+        data: {
+          message: 'Invalid model ID',
+          providerID: 'ollama',
+        },
+      });
+    });
+
+    it('should trigger callback for session.error events with UnknownError', () => {
+      const callback = vi.fn();
+      client.connect('http://127.0.0.1:3000');
+      client.onSessionError(callback);
+
+      const messageHandler = mockEventSourceInstance.addEventListener.mock.calls.find(
+        (call: any) => call[0] === 'message'
+      )?.[1];
+
+      const event = {
+        data: JSON.stringify({
+          type: 'session.error',
+          properties: {
+            sessionID: 'session-2',
+            error: {
+              name: 'UnknownError',
+              data: {
+                message: 'Rate limit exceeded',
+              },
+            },
+          },
+        }),
+      };
+
+      messageHandler(event);
+
+      expect(callback).toHaveBeenCalledWith('session-2', {
+        name: 'UnknownError',
+        data: {
+          message: 'Rate limit exceeded',
+        },
+      });
+    });
+
+    it('should not trigger callback when error property is missing', () => {
+      const callback = vi.fn();
+      client.connect('http://127.0.0.1:3000');
+      client.onSessionError(callback);
+
+      const messageHandler = mockEventSourceInstance.addEventListener.mock.calls.find(
+        (call: any) => call[0] === 'message'
+      )?.[1];
+
+      const event = {
+        data: JSON.stringify({
+          type: 'session.error',
+          properties: {
+            sessionID: 'session-1',
+          },
+        }),
+      };
+
+      messageHandler(event);
+
+      expect(callback).not.toHaveBeenCalled();
+    });
+
+    it('should not trigger callback for non-error events', () => {
+      const callback = vi.fn();
+      client.connect('http://127.0.0.1:3000');
+      client.onSessionError(callback);
+
+      const messageHandler = mockEventSourceInstance.addEventListener.mock.calls.find(
+        (call: any) => call[0] === 'message'
+      )?.[1];
+
+      const event = {
+        data: JSON.stringify({
+          type: 'session.idle',
+          properties: {
+            sessionID: 'session-1',
+          },
+        }),
+      };
+
+      messageHandler(event);
+
+      expect(callback).not.toHaveBeenCalled();
+    });
+  });
+
   describe('onError', () => {
     it('should trigger callback on error', () => {
       const callback = vi.fn();

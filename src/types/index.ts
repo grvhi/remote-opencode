@@ -82,3 +82,11 @@ export interface PassthroughThread {
   enabledBy: string;  // userId
   enabledAt: number;
 }
+
+export interface SessionErrorInfo {
+  name: 'ProviderAuthError' | 'UnknownError' | 'MessageOutputLengthError' | 'MessageAbortedError';
+  data: {
+    message?: string;
+    providerID?: string;
+  };
+}
