@@ -101,6 +101,20 @@ export async function listSessions(port: number): Promise<string[]> {
   }
 }
 
+export async function replyToPermission(port: number, permissionId: string, allow: boolean): Promise<boolean> {
+  try {
+    const url = `${getBaseUrl(port)}/permission/${permissionId}/reply`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(allow ? 'allow' : 'deny'),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function replyToQuestion(port: number, requestId: string, answers: string[][]): Promise<boolean> {
   try {
     const url = `${getBaseUrl(port)}/question/${requestId}/reply`;

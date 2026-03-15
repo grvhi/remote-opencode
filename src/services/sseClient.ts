@@ -1,11 +1,12 @@
 import { EventSource } from 'eventsource';
-import type { TextPart, SSEEvent, SessionErrorInfo, QuestionRequest, TodoItem } from '../types/index.js';
+import type { TextPart, SSEEvent, SessionErrorInfo, QuestionRequest, TodoItem, PermissionRequest } from '../types/index.js';
 
 type PartUpdatedCallback = (part: TextPart) => void;
 type SessionIdleCallback = (sessionId: string) => void;
 type SessionErrorCallback = (sessionId: string, error: SessionErrorInfo) => void;
 type QuestionAskedCallback = (question: QuestionRequest) => void;
 type TodoUpdatedCallback = (sessionId: string, todos: TodoItem[]) => void;
+type PermissionUpdatedCallback = (permission: PermissionRequest) => void;
 type ErrorCallback = (error: Error) => void;
 
 export class SSEClient {
@@ -15,6 +16,7 @@ export class SSEClient {
   private sessionErrorCallbacks: SessionErrorCallback[] = [];
   private questionAskedCallbacks: QuestionAskedCallback[] = [];
   private todoUpdatedCallbacks: TodoUpdatedCallback[] = [];
+  private permissionUpdatedCallbacks: PermissionUpdatedCallback[] = [];
   private errorCallbacks: ErrorCallback[] = [];
 
   connect(baseUrl: string): void {
@@ -53,6 +55,10 @@ export class SSEClient {
 
   onTodoUpdated(callback: TodoUpdatedCallback): void {
     this.todoUpdatedCallbacks.push(callback);
+  }
+
+  onPermissionUpdated(callback: PermissionUpdatedCallback): void {
+    this.permissionUpdatedCallbacks.push(callback);
   }
 
   onError(callback: ErrorCallback): void {
@@ -97,6 +103,22 @@ export class SSEClient {
       const props = event.properties as any;
       if (props && props.sessionID && props.todos) {
         this.todoUpdatedCallbacks.forEach((cb) => cb(props.sessionID, props.todos));
+      }
+    } else if (event.type === 'permission.updated') {
+      const props = event.properties as any;
+      if (props && props.id && props.sessionID) {
+        const permission: PermissionRequest = {
+          id: props.id,
+          type: props.type || 'unknown',
+          pattern: props.pattern,
+          sessionID: props.sessionID,
+          messageID: props.messageID || '',
+          callID: props.callID,
+          title: props.title || `Permission: ${props.type || 'unknown'}`,
+          metadata: props.metadata || {},
+          time: props.time || { created: Date.now() },
+        };
+        this.permissionUpdatedCallbacks.forEach((cb) => cb(permission));
       }
     } else if (event.type === 'question.asked') {
       const props = event.properties as any;

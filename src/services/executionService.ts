@@ -8,7 +8,7 @@ import {
   EmbedBuilder,
   ComponentType
 } from 'discord.js';
-import type { QuestionRequest, TodoItem } from '../types/index.js';
+import type { QuestionRequest, TodoItem, PermissionRequest } from '../types/index.js';
 import * as dataStore from './dataStore.js';
 import * as sessionManager from './sessionManager.js';
 import { getServeHostname } from './configStore.js';
@@ -294,6 +294,78 @@ export async function runPrompt(
           }
         } catch (error) {
           console.error('Error in onSessionError:', error);
+        }
+      })();
+    });
+    
+    sseClient.onPermissionUpdated((permission: PermissionRequest) => {
+      if (permission.sessionID !== sessionId) return;
+      
+      (async () => {
+        try {
+          const pattern = Array.isArray(permission.pattern)
+            ? permission.pattern.join(', ')
+            : permission.pattern || '';
+          
+          const description = pattern
+            ? `**${permission.title}**\n\`${pattern}\``
+            : `**${permission.title}**`;
+          
+          const allowBtn = new ButtonBuilder()
+            .setCustomId(`perm_allow_${permission.id}`)
+            .setLabel('✅ Allow')
+            .setStyle(ButtonStyle.Success);
+          
+          const denyBtn = new ButtonBuilder()
+            .setCustomId(`perm_deny_${permission.id}`)
+            .setLabel('❌ Deny')
+            .setStyle(ButtonStyle.Danger);
+          
+          const alwaysBtn = new ButtonBuilder()
+            .setCustomId(`perm_always_${permission.id}`)
+            .setLabel('Always Allow')
+            .setStyle(ButtonStyle.Secondary);
+          
+          const row = new ActionRowBuilder<ButtonBuilder>().addComponents(allowBtn, denyBtn, alwaysBtn);
+          
+          const permMsg = await (channel as any).send({
+            content: `🔐 **Permission Request**\n${description}`,
+            components: [row],
+          });
+          
+          try {
+            const collected = await permMsg.awaitMessageComponent({
+              time: 120_000,
+            });
+            
+            if (collected.customId.startsWith('perm_allow_') || collected.customId.startsWith('perm_always_')) {
+              await collected.update({
+                content: `🔐 **Permission Request** — ✅ Allowed\n${description}`,
+                components: [],
+              });
+              await sessionManager.replyToPermission(port, permission.id, true);
+            } else {
+              await collected.update({
+                content: `🔐 **Permission Request** — ❌ Denied\n${description}`,
+                components: [],
+              });
+              await sessionManager.replyToPermission(port, permission.id, false);
+            }
+          } catch {
+            // Timeout — auto-allow (less disruptive than blocking)
+            try {
+              await permMsg.edit({
+                content: `🔐 **Permission Request** — ✅ Auto-allowed (timeout)\n${description}`,
+                components: [],
+              });
+            } catch {}
+            await sessionManager.replyToPermission(port, permission.id, true);
+          }
+        } catch (error) {
+          console.error('Error handling permission:', error);
+          try {
+            await sessionManager.replyToPermission(port, permission.id, true);
+          } catch {}
         }
       })();
     });

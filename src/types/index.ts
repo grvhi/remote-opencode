@@ -91,6 +91,18 @@ export interface SessionErrorInfo {
   };
 }
 
+export interface PermissionRequest {
+  id: string;
+  type: string;
+  pattern?: string | Array<string>;
+  sessionID: string;
+  messageID: string;
+  callID?: string;
+  title: string;
+  metadata: { [key: string]: unknown };
+  time: { created: number };
+}
+
 export interface TodoItem {
   id: string;
   content: string;
