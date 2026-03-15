@@ -116,7 +116,6 @@ export async function runPrompt(
   let hasSessionError = false;
   let todoMessage: Message | null = null;
   let lastTodoContent = '';
-  const textParts = new Map<string, string>(); // partID → latest text
   const spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
   
   const updateStreamMessage = async (content: string, components: ActionRowBuilder<ButtonBuilder>[]) => {
@@ -168,13 +167,9 @@ export async function runPrompt(
     
     sseClient.onPartUpdated((part) => {
       if (part.sessionID !== sessionId) return;
-      // Track each text part by its unique ID — parts get progressively updated
-      // but different messages have different part IDs
-      textParts.set(part.id, part.text);
-      // Concatenate all text parts in insertion order for the full response
-      accumulatedText = Array.from(textParts.values())
-        .filter((t) => t.trim())
-        .join('\n\n');
+      // Only keep the latest text — intermediate "thinking" parts between tool
+      // calls are noise. The final text part is the actual response.
+      accumulatedText = part.text;
     });
     
     sseClient.onSessionIdle((idleSessionId) => {
@@ -202,6 +197,31 @@ export async function runPrompt(
                 .setStyle(ButtonStyle.Secondary)
                 .setDisabled(true)
             );
+
+          // If SSE didn't capture any text, try fetching the last message via API
+          if (!accumulatedText.trim()) {
+            try {
+              const sseHostname = getServeHostname();
+              const sseHost = sseHostname === '0.0.0.0' ? '127.0.0.1' : sseHostname;
+              const msgResp = await fetch(`http://${sseHost}:${port}/session/${sessionId}/message`);
+              if (msgResp.ok) {
+                const messages = await msgResp.json() as Array<{ role?: string; parts?: Array<{ type?: string; text?: string }> }>;
+                // Find last assistant message with a text part
+                for (let i = messages.length - 1; i >= 0; i--) {
+                  const msg = messages[i];
+                  if (msg.role === 'assistant') {
+                    const textPart = msg.parts?.find((p: { type?: string }) => p.type === 'text' && (p as any).text?.trim());
+                    if (textPart) {
+                      accumulatedText = (textPart as any).text;
+                      break;
+                    }
+                  }
+                }
+              }
+            } catch {
+              // API fallback failed, continue with empty
+            }
+          }
 
           if (!accumulatedText.trim()) {
             await updateStreamMessage(
