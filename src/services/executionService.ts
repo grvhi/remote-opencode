@@ -8,7 +8,7 @@ import {
   EmbedBuilder,
   ComponentType
 } from 'discord.js';
-import type { QuestionRequest } from '../types/index.js';
+import type { QuestionRequest, TodoItem } from '../types/index.js';
 import * as dataStore from './dataStore.js';
 import * as sessionManager from './sessionManager.js';
 import { getServeHostname } from './configStore.js';
@@ -114,6 +114,8 @@ export async function runPrompt(
   let tick = 0;
   let promptSent = false;
   let hasSessionError = false;
+  let todoMessage: Message | null = null;
+  let lastTodoContent = '';
   const spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
   
   const updateStreamMessage = async (content: string, components: ActionRowBuilder<ButtonBuilder>[]) => {
@@ -265,6 +267,50 @@ export async function runPrompt(
           }
         } catch (error) {
           console.error('Error in onSessionError:', error);
+        }
+      })();
+    });
+    
+    sseClient.onTodoUpdated((todoSessionId: string, todos: TodoItem[]) => {
+      if (todoSessionId !== sessionId) return;
+      
+      const statusEmoji: Record<string, string> = {
+        completed: '✅',
+        in_progress: '🔄',
+        pending: '⬜',
+        cancelled: '❌',
+      };
+      
+      const priorityLabel: Record<string, string> = {
+        high: '🔴',
+        medium: '🟡',
+        low: '🟢',
+      };
+      
+      const lines = todos.map((t) => {
+        const status = statusEmoji[t.status] || '⬜';
+        const priority = priorityLabel[t.priority] || '';
+        return `${status} ${priority} ${t.content}`;
+      });
+      
+      const completed = todos.filter((t) => t.status === 'completed').length;
+      const total = todos.length;
+      const content = `📋 **Tasks** (${completed}/${total})\n${lines.join('\n')}`;
+      
+      // Skip update if content hasn't changed
+      if (content === lastTodoContent) return;
+      lastTodoContent = content;
+      
+      (async () => {
+        try {
+          if (todoMessage) {
+            await todoMessage.edit({ content });
+          } else {
+            todoMessage = await (channel as any).send({ content });
+          }
+        } catch {
+          // Message may have been deleted
+          todoMessage = null;
         }
       })();
     });

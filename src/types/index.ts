@@ -91,6 +91,13 @@ export interface SessionErrorInfo {
   };
 }
 
+export interface TodoItem {
+  id: string;
+  content: string;
+  status: string;  // pending, in_progress, completed, cancelled
+  priority: string; // high, medium, low
+}
+
 export interface QuestionOption {
   label: string;
   description: string;
