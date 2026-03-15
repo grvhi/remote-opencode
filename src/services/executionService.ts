@@ -116,6 +116,7 @@ export async function runPrompt(
   let hasSessionError = false;
   let todoMessage: Message | null = null;
   let lastTodoContent = '';
+  const textParts = new Map<string, string>(); // partID → latest text
   const spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
   
   const updateStreamMessage = async (content: string, components: ActionRowBuilder<ButtonBuilder>[]) => {
@@ -167,7 +168,13 @@ export async function runPrompt(
     
     sseClient.onPartUpdated((part) => {
       if (part.sessionID !== sessionId) return;
-      accumulatedText = part.text;
+      // Track each text part by its unique ID — parts get progressively updated
+      // but different messages have different part IDs
+      textParts.set(part.id, part.text);
+      // Concatenate all text parts in insertion order for the full response
+      accumulatedText = Array.from(textParts.values())
+        .filter((t) => t.trim())
+        .join('\n\n');
     });
     
     sseClient.onSessionIdle((idleSessionId) => {
