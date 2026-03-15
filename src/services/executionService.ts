@@ -2,10 +2,13 @@ import {
   ActionRowBuilder, 
   ButtonBuilder, 
   ButtonStyle,
+  StringSelectMenuBuilder,
   Message,
   TextBasedChannel,
-  EmbedBuilder
+  EmbedBuilder,
+  ComponentType
 } from 'discord.js';
+import type { QuestionRequest } from '../types/index.js';
 import * as dataStore from './dataStore.js';
 import * as sessionManager from './sessionManager.js';
 import { getServeHostname } from './configStore.js';
@@ -262,6 +265,139 @@ export async function runPrompt(
           }
         } catch (error) {
           console.error('Error in onSessionError:', error);
+        }
+      })();
+    });
+    
+    sseClient.onQuestionAsked((question: QuestionRequest) => {
+      if (question.sessionID !== sessionId) return;
+      
+      (async () => {
+        try {
+          for (let qi = 0; qi < question.questions.length; qi++) {
+            const q = question.questions[qi];
+            
+            if (q.options.length > 0) {
+              // Render as Discord select menu
+              const options = q.options.map((opt, i) => ({
+                label: opt.label.slice(0, 100),
+                description: opt.description?.slice(0, 100) || undefined,
+                value: String(i),
+              }));
+              
+              // Add custom answer option if allowed (default: true)
+              if (q.custom !== false) {
+                options.push({
+                  label: '✏️ Type custom answer',
+                  description: 'Provide your own response',
+                  value: '__custom__',
+                });
+              }
+              
+              const selectMenu = new StringSelectMenuBuilder()
+                .setCustomId(`question_${question.id}_${qi}`)
+                .setPlaceholder(q.header || 'Select an option')
+                .setMinValues(1)
+                .setMaxValues(q.multiple ? Math.min(options.length, 25) : 1)
+                .addOptions(options.slice(0, 25));
+              
+              const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
+              
+              const skipButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
+                new ButtonBuilder()
+                  .setCustomId(`question_skip_${question.id}`)
+                  .setLabel('Skip / Dismiss')
+                  .setStyle(ButtonStyle.Secondary)
+              );
+              
+              const questionMsg = await (channel as any).send({
+                content: `❓ **${q.header}**\n${q.question}`,
+                components: [row, skipButton],
+              });
+              
+              // Wait for user interaction (5 minute timeout)
+              try {
+                const collected = await questionMsg.awaitMessageComponent({
+                  time: 300_000,
+                });
+                
+                if (collected.customId.startsWith('question_skip_')) {
+                  await collected.update({ content: `❓ **${q.header}** — *Dismissed*`, components: [] });
+                  await sessionManager.rejectQuestion(port, question.id);
+                  return;
+                }
+                
+                if (collected.isStringSelectMenu()) {
+                  const selectedValues = collected.values;
+                  
+                  if (selectedValues.includes('__custom__')) {
+                    await collected.update({ content: `❓ **${q.header}**\n\nType your answer below:`, components: [] });
+                    
+                    const msgCollected = await (channel as any).awaitMessages({
+                      max: 1,
+                      time: 300_000,
+                      filter: (m: Message) => !m.author.bot,
+                    });
+                    
+                    const userReply = msgCollected.first()?.content;
+                    if (userReply) {
+                      const answers: string[][] = question.questions.map(() => []);
+                      answers[qi] = [userReply];
+                      await sessionManager.replyToQuestion(port, question.id, answers);
+                      await (channel as any).send(`✅ Answered: "${userReply.slice(0, 100)}"`);
+                    } else {
+                      await sessionManager.rejectQuestion(port, question.id);
+                      await (channel as any).send('⏭️ Question timed out — dismissed.');
+                    }
+                  } else {
+                    const selectedLabels = selectedValues.map((v: string) => q.options[parseInt(v)].label);
+                    const answers: string[][] = question.questions.map(() => []);
+                    answers[qi] = selectedLabels;
+                    
+                    await collected.update({
+                      content: `❓ **${q.header}** — Selected: ${selectedLabels.join(', ')}`,
+                      components: [],
+                    });
+                    
+                    await sessionManager.replyToQuestion(port, question.id, answers);
+                  }
+                }
+              } catch {
+                // Timeout — dismiss the question
+                try {
+                  await questionMsg.edit({ content: `❓ **${q.header}** — *Timed out*`, components: [] });
+                } catch {}
+                await sessionManager.rejectQuestion(port, question.id);
+              }
+            } else {
+              // No options — free text question
+              await (channel as any).send(`❓ **${q.header}**\n${q.question}\n\n*Type your answer below:*`);
+              
+              try {
+                const msgCollected = await (channel as any).awaitMessages({
+                  max: 1,
+                  time: 300_000,
+                  filter: (m: Message) => !m.author.bot,
+                });
+                
+                const userReply = msgCollected.first()?.content;
+                if (userReply) {
+                  const answers: string[][] = question.questions.map(() => []);
+                  answers[qi] = [userReply];
+                  await sessionManager.replyToQuestion(port, question.id, answers);
+                } else {
+                  await sessionManager.rejectQuestion(port, question.id);
+                }
+              } catch {
+                await sessionManager.rejectQuestion(port, question.id);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error handling question:', error);
+          try {
+            await sessionManager.rejectQuestion(port, question.id);
+          } catch {}
         }
       })();
     });

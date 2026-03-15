@@ -101,6 +101,32 @@ export async function listSessions(port: number): Promise<string[]> {
   }
 }
 
+export async function replyToQuestion(port: number, requestId: string, answers: string[][]): Promise<boolean> {
+  try {
+    const url = `${getBaseUrl(port)}/question/${requestId}/reply`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answers }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function rejectQuestion(port: number, requestId: string): Promise<boolean> {
+  try {
+    const url = `${getBaseUrl(port)}/question/${requestId}/reject`;
+    const response = await fetch(url, {
+      method: 'POST',
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function abortSession(port: number, sessionId: string): Promise<boolean> {
   try {
     const url = `${getBaseUrl(port)}/session/${sessionId}/abort`;

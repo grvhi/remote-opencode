@@ -1,9 +1,10 @@
 import { EventSource } from 'eventsource';
-import type { TextPart, SSEEvent, SessionErrorInfo } from '../types/index.js';
+import type { TextPart, SSEEvent, SessionErrorInfo, QuestionRequest } from '../types/index.js';
 
 type PartUpdatedCallback = (part: TextPart) => void;
 type SessionIdleCallback = (sessionId: string) => void;
 type SessionErrorCallback = (sessionId: string, error: SessionErrorInfo) => void;
+type QuestionAskedCallback = (question: QuestionRequest) => void;
 type ErrorCallback = (error: Error) => void;
 
 export class SSEClient {
@@ -11,6 +12,7 @@ export class SSEClient {
   private partUpdatedCallbacks: PartUpdatedCallback[] = [];
   private sessionIdleCallbacks: SessionIdleCallback[] = [];
   private sessionErrorCallbacks: SessionErrorCallback[] = [];
+  private questionAskedCallbacks: QuestionAskedCallback[] = [];
   private errorCallbacks: ErrorCallback[] = [];
 
   connect(baseUrl: string): void {
@@ -41,6 +43,10 @@ export class SSEClient {
 
   onSessionError(callback: SessionErrorCallback): void {
     this.sessionErrorCallbacks.push(callback);
+  }
+
+  onQuestionAsked(callback: QuestionAskedCallback): void {
+    this.questionAskedCallbacks.push(callback);
   }
 
   onError(callback: ErrorCallback): void {
@@ -80,6 +86,17 @@ export class SSEClient {
       const error = (event.properties as any).error as SessionErrorInfo | undefined;
       if (sessionID && error) {
         this.sessionErrorCallbacks.forEach((cb) => cb(sessionID, error));
+      }
+    } else if (event.type === 'question.asked') {
+      const props = event.properties as any;
+      if (props && props.id && props.questions) {
+        const question: QuestionRequest = {
+          id: props.id,
+          sessionID: props.sessionID,
+          questions: props.questions,
+          tool: props.tool,
+        };
+        this.questionAskedCallbacks.forEach((cb) => cb(question));
       }
     }
   }
