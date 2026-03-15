@@ -71,9 +71,13 @@ export const opencode: Command = {
       return;
     }
 
-    await interaction.editReply({
-      content: `📌 **Prompt**: ${prompt}`
-    });
+    // Delete the deferred reply — runPrompt sends its own message with context header
+    try {
+      await interaction.deleteReply();
+    } catch {
+      // If delete fails, edit to minimal
+      try { await interaction.editReply({ content: '⏳' }); } catch {}
+    }
 
     await runPrompt(thread as any, threadId, prompt, channelId);
   }
