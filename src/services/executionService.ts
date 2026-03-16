@@ -198,29 +198,29 @@ export async function runPrompt(
                 .setDisabled(true)
             );
 
-          // If SSE didn't capture any text, try fetching the last message via API
-          if (!accumulatedText.trim()) {
-            try {
-              const sseHostname = getServeHostname();
-              const sseHost = sseHostname === '0.0.0.0' ? '127.0.0.1' : sseHostname;
-              const msgResp = await fetch(`http://${sseHost}:${port}/session/${sessionId}/message`);
-              if (msgResp.ok) {
-                const messages = await msgResp.json() as Array<{ role?: string; parts?: Array<{ type?: string; text?: string }> }>;
-                // Find last assistant message with a text part
-                for (let i = messages.length - 1; i >= 0; i--) {
-                  const msg = messages[i];
-                  if (msg.role === 'assistant') {
-                    const textPart = msg.parts?.find((p: { type?: string }) => p.type === 'text' && (p as any).text?.trim());
-                    if (textPart) {
-                      accumulatedText = (textPart as any).text;
-                      break;
-                    }
+          // Always fetch the final response from the API — the SSE stream only
+          // captures the last text part update, which may be intermediate thinking
+          // rather than the final summary (e.g., model ends with a tool call)
+          try {
+            const sseHostname = getServeHostname();
+            const sseHost = sseHostname === '0.0.0.0' ? '127.0.0.1' : sseHostname;
+            const msgResp = await fetch(`http://${sseHost}:${port}/session/${sessionId}/message`);
+            if (msgResp.ok) {
+              const messages = await msgResp.json() as Array<{ role?: string; parts?: Array<{ type?: string; text?: string }> }>;
+              // Find last assistant message with a substantive text part
+              for (let i = messages.length - 1; i >= 0; i--) {
+                const msg = messages[i];
+                if (msg.role === 'assistant') {
+                  const textPart = msg.parts?.find((p: { type?: string }) => p.type === 'text' && (p as any).text?.trim());
+                  if (textPart && (textPart as any).text.trim().length > 0) {
+                    accumulatedText = (textPart as any).text;
+                    break;
                   }
                 }
               }
-            } catch {
-              // API fallback failed, continue with empty
             }
+          } catch {
+            // API fetch failed, fall back to SSE-captured text
           }
 
           if (!accumulatedText.trim()) {
