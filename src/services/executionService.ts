@@ -241,7 +241,13 @@ export async function runPrompt(
               await (channel as any).send({ content: result.chunks[i] });
             }
             
-            await (channel as any).send({ content: '✅ Done' });
+            // Build a summary for the Done message — truncate to fit Discord's 2000 char limit
+            const summaryMaxLen = 1900;
+            const summaryText = accumulatedText.trim();
+            const truncated = summaryText.length > summaryMaxLen
+              ? summaryText.slice(0, summaryMaxLen) + '…'
+              : summaryText;
+            await (channel as any).send({ content: `✅ **Done**\n\n${truncated}` });
           }
           
           sseClient.disconnect();
