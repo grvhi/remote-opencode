@@ -7,6 +7,12 @@ import * as worktreeManager from '../services/worktreeManager.js';
 export async function handleButton(interaction: ButtonInteraction) {
   const customId = interaction.customId;
   
+  // Permission and question buttons are handled by awaitMessageComponent collectors
+  // in executionService — don't intercept them here
+  if (customId.startsWith('perm_') || customId.startsWith('question_')) {
+    return;
+  }
+  
   const [action, threadId] = customId.split('_');
   
   if (!threadId) {
