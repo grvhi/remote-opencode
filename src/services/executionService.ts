@@ -299,7 +299,11 @@ export async function runPrompt(
     });
     
     sseClient.onPermissionUpdated((permission: PermissionRequest) => {
-      if (permission.sessionID !== sessionId) return;
+      console.log(`[permission] Received permission.updated: id=${permission.id} type=${permission.type} session=${permission.sessionID} title=${permission.title}`);
+      if (permission.sessionID !== sessionId) {
+        console.log(`[permission] Skipped — session mismatch (want ${sessionId}, got ${permission.sessionID})`);
+        return;
+      }
       
       (async () => {
         try {
@@ -343,13 +347,13 @@ export async function runPrompt(
                 content: `🔐 **Permission Request** — ✅ Allowed\n${description}`,
                 components: [],
               });
-              await sessionManager.replyToPermission(port, permission.id, true);
+              await sessionManager.replyToPermission(port, sessionId, permission.id, true);
             } else {
               await collected.update({
                 content: `🔐 **Permission Request** — ❌ Denied\n${description}`,
                 components: [],
               });
-              await sessionManager.replyToPermission(port, permission.id, false);
+              await sessionManager.replyToPermission(port, sessionId, permission.id, false);
             }
           } catch {
             // Timeout — auto-allow (less disruptive than blocking)
@@ -359,12 +363,12 @@ export async function runPrompt(
                 components: [],
               });
             } catch {}
-            await sessionManager.replyToPermission(port, permission.id, true);
+            await sessionManager.replyToPermission(port, sessionId, permission.id, true);
           }
         } catch (error) {
           console.error('Error handling permission:', error);
           try {
-            await sessionManager.replyToPermission(port, permission.id, true);
+            await sessionManager.replyToPermission(port, sessionId, permission.id, true);
           } catch {}
         }
       })();

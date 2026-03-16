@@ -101,9 +101,9 @@ export async function listSessions(port: number): Promise<string[]> {
   }
 }
 
-export async function replyToPermission(port: number, permissionId: string, allow: boolean): Promise<boolean> {
+export async function replyToPermission(port: number, sessionId: string, permissionId: string, allow: boolean): Promise<boolean> {
   try {
-    const url = `${getBaseUrl(port)}/permission/${permissionId}/reply`;
+    const url = `${getBaseUrl(port)}/session/${sessionId}/permissions/${permissionId}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
