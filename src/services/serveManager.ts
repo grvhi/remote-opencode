@@ -106,7 +106,10 @@ export async function spawnServe(projectPath: string, model?: string): Promise<n
   
   const child = spawn('opencode', args, {
     cwd: projectPath,
-    env: { ...process.env },
+    env: {
+      ...process.env,
+      OPENCODE_EXPERIMENTAL_WORKSPACES: '1',
+    },
     stdio: ['inherit', 'pipe', 'pipe'],
     shell: true,
   });
