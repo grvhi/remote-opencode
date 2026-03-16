@@ -110,17 +110,17 @@ export class SSEClient {
       if (props && props.sessionID && props.todos) {
         this.todoUpdatedCallbacks.forEach((cb) => cb(props.sessionID, props.todos));
       }
-    } else if (event.type === 'permission.updated') {
+    } else if (event.type === 'permission.updated' || event.type === 'permission.asked') {
       const props = event.properties as any;
       if (props && props.id && props.sessionID) {
         const permission: PermissionRequest = {
           id: props.id,
-          type: props.type || 'unknown',
-          pattern: props.pattern,
+          type: props.permission || props.type || 'unknown',
+          pattern: props.patterns || props.pattern,
           sessionID: props.sessionID,
           messageID: props.messageID || '',
           callID: props.callID,
-          title: props.title || `Permission: ${props.type || 'unknown'}`,
+          title: props.title || `Permission: ${props.permission || props.type || 'unknown'}`,
           metadata: props.metadata || {},
           time: props.time || { created: Date.now() },
         };
