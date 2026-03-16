@@ -77,6 +77,12 @@ export class SSEClient {
   }
 
   private handleMessage(event: SSEEvent): void {
+    // Log non-routine events for debugging
+    if (!['message.part.updated', 'message.part.delta', 'message.updated', 'session.updated', 
+          'session.status', 'session.diff', 'server.connected', 'server.heartbeat',
+          'message.part.removed'].includes(event.type)) {
+      console.log(`[sse] Event: ${event.type} | props: ${JSON.stringify(event.properties).slice(0, 200)}`);
+    }
     if (event.type === 'message.part.updated') {
       const part = (event.properties as any).part;
       if (part && part.type === 'text') {
