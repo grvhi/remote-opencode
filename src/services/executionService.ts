@@ -342,33 +342,39 @@ export async function runPrompt(
               time: 120_000,
             });
             
-            if (collected.customId.startsWith('perm_allow_') || collected.customId.startsWith('perm_always_')) {
+            if (collected.customId.startsWith('perm_always_')) {
+              await collected.update({
+                content: `🔐 **Permission Request** — ✅ Always Allowed\n${description}`,
+                components: [],
+              });
+              await sessionManager.replyToPermission(port, sessionId, permission.id, 'always');
+            } else if (collected.customId.startsWith('perm_allow_')) {
               await collected.update({
                 content: `🔐 **Permission Request** — ✅ Allowed\n${description}`,
                 components: [],
               });
-              await sessionManager.replyToPermission(port, sessionId, permission.id, true);
+              await sessionManager.replyToPermission(port, sessionId, permission.id, 'once');
             } else {
               await collected.update({
                 content: `🔐 **Permission Request** — ❌ Denied\n${description}`,
                 components: [],
               });
-              await sessionManager.replyToPermission(port, sessionId, permission.id, false);
+              await sessionManager.replyToPermission(port, sessionId, permission.id, 'reject');
             }
           } catch {
-            // Timeout — auto-allow (less disruptive than blocking)
+            // Timeout — auto-allow once (less disruptive than blocking)
             try {
               await permMsg.edit({
                 content: `🔐 **Permission Request** — ✅ Auto-allowed (timeout)\n${description}`,
                 components: [],
               });
             } catch {}
-            await sessionManager.replyToPermission(port, sessionId, permission.id, true);
+            await sessionManager.replyToPermission(port, sessionId, permission.id, 'once');
           }
         } catch (error) {
           console.error('Error handling permission:', error);
           try {
-            await sessionManager.replyToPermission(port, sessionId, permission.id, true);
+            await sessionManager.replyToPermission(port, sessionId, permission.id, 'once');
           } catch {}
         }
       })();

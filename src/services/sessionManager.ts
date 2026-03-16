@@ -101,16 +101,18 @@ export async function listSessions(port: number): Promise<string[]> {
   }
 }
 
-export async function replyToPermission(port: number, sessionId: string, permissionId: string, allow: boolean): Promise<boolean> {
+export async function replyToPermission(port: number, sessionId: string, permissionId: string, response: 'once' | 'always' | 'reject'): Promise<boolean> {
   try {
     const url = `${getBaseUrl(port)}/session/${sessionId}/permissions/${permissionId}`;
-    const response = await fetch(url, {
+    const resp = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(allow ? 'allow' : 'deny'),
+      body: JSON.stringify({ response }),
     });
-    return response.ok;
-  } catch {
+    console.log(`[permission] Reply ${response} for ${permissionId}: ${resp.status}`);
+    return resp.ok;
+  } catch (err) {
+    console.error(`[permission] Reply failed for ${permissionId}:`, err);
     return false;
   }
 }
